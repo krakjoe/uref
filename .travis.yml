@@ -1,10 +1,5 @@
 language: php
-compiler:
-  - gcc
-addons:
-  apt:
-    packages:
-      - valgrind
+compiler: clang
 php:
   - 7.0
   - 7.1
@@ -14,13 +9,12 @@ php:
 env:
   global:
     - REPORT_EXIT_STATUS=1
-    - CONF="without-uref-coverage"
     - RULE="all"
     - DEF="-q --show-diff"
   matrix:
     - OPCACHE=0 TEST_PHP_ARGS="$DEF"
     - OPCACHE=1 TEST_PHP_ARGS="$DEF"
-    - OPCACHE=0 TEST_PHP_ARGS="$DEF" CONF="with-uref-coverage" RULE="uref-test-coverage-travis"
+    - OPCACHE=0 TEST_PHP_ARGS="$DEF" RULE="uref-test-coverage-travis"
 
 matrix:
   allow_failures:

@@ -136,7 +136,7 @@ static inline void php_uref_protect() {
 	
 	mprotect(php_uref_pageof(store->object_buckets), 
 		 php_uref_get_pagesize(store->object_buckets, (store->size) * sizeof(zend_object*)), 
-		 PROT_READ|PROT_EXEC);
+		 PROT_READ);
 }
 
 static inline void php_uref_unprotect() {

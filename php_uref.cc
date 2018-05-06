@@ -131,7 +131,7 @@ uint64_t php_uref_get_instr_length(uint64_t address) {
 	return 0;
 }
 
-static inline void php_uref_protect() {
+static zend_always_inline void php_uref_protect() {
 	zend_objects_store *store = &EG(objects_store);
 	
 	mprotect(php_uref_pageof(store->object_buckets), 
@@ -139,7 +139,7 @@ static inline void php_uref_protect() {
 		 PROT_READ);
 }
 
-static inline void php_uref_unprotect() {
+static zend_always_inline void php_uref_unprotect() {
 	zend_objects_store *store = &EG(objects_store);
 
 	mprotect(php_uref_pageof(store->object_buckets), 
@@ -147,7 +147,7 @@ static inline void php_uref_unprotect() {
 		 PROT_READ|PROT_WRITE);
 }
 
-static inline void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
+static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]-1);
 
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_WRITE);
@@ -165,7 +165,9 @@ static inline void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) 
 	php_uref_protect();
 }
 
-static inline void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
+static zend_always_inline void php_uref_update(zend_long idx);
+
+static void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = 
 		reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]);
 	uint8_t *trap = rip + php_uref_get_instr_length(context->uc_mcontext.gregs[REG_RIP]);
@@ -196,23 +198,10 @@ static inline void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) 
 
 	php_uref_unprotect();
 
-	{
-		zval *ze = zend_hash_index_find(&UG(refs), 
-			reinterpret_cast<zend_ulong>(info->si_addr));
-
-		if (ze) {
-			php_uref_t *u = php_uref_fetch(ze);
-
-			if (Z_TYPE(u->referent) != IS_UNDEF && 
-			    Z_REFCOUNT(u->referent) == 0) {
-				ZVAL_UNDEF(&u->referent);
-			}
-		}
-	}
-	
+	php_uref_update(reinterpret_cast<zend_ulong>(info->si_addr));
 }
 
-static inline zend_object* php_uref_create(zend_class_entry *ce) {
+static zend_object* php_uref_create(zend_class_entry *ce) {
 	php_uref_t *u = 
 		(php_uref_t*) 
 			ecalloc(1, sizeof(php_uref_t));
@@ -224,13 +213,57 @@ static inline zend_object* php_uref_create(zend_class_entry *ce) {
 	return &u->std;
 }
 
-static inline void php_uref_attach(zval *ze, zval *referent) {
+static zend_always_inline int php_uref_add(zend_long idx, zval *ze) {
+	HashTable *refs = static_cast<HashTable*>(zend_hash_index_find_ptr(&UG(refs), idx));
+
+	if (!refs) {
+		refs = static_cast<HashTable*>(emalloc(sizeof(HashTable)));
+
+		zend_hash_init(refs, 4, NULL, ZVAL_PTR_DTOR, 0);
+
+		zend_hash_index_update_ptr(&UG(refs), idx, refs);
+	}
+
+	if (zend_hash_index_update(refs, Z_OBJ_P(ze)->handle, ze)) {
+		Z_ADDREF_P(ze);
+
+		return SUCCESS;
+	}
+
+	return FAILURE;
+}
+
+static zend_always_inline void php_uref_update(zend_long idx) {
+	HashTable *refs = static_cast<HashTable*>(zend_hash_index_find_ptr(&UG(refs), idx));
+	zval *ze;
+	bool deleting = false;
+
+	if (!refs) {
+		return;
+	}
+
+	ZEND_HASH_FOREACH_VAL(refs, ze) {
+		php_uref_t *u = php_uref_fetch(ze);
+
+		if (deleting ||
+		    (Z_TYPE(u->referent) != IS_UNDEF && Z_REFCOUNT(u->referent) == 0)) {
+			ZVAL_UNDEF(&u->referent);
+			deleting = true;
+		} else break;
+	} ZEND_HASH_FOREACH_END();
+
+	if (deleting) {
+		zend_hash_index_del(&UG(refs), idx);
+	}
+}
+
+static zend_always_inline void php_uref_attach(zval *ze, zval *referent) {
 	php_uref_t *u = php_uref_fetch(ze);
 
 	ZVAL_COPY_VALUE(&u->referent, referent);
 
-	if (zend_hash_index_update(&UG(refs), php_uref_bucketof(Z_OBJ_P(referent)), ze)) {
-		Z_ADDREF_P(ze);
+	if (php_uref_add(php_uref_bucketof(Z_OBJ_P(referent)), ze) != SUCCESS) {
+		/* throw ? */
 	}
 
 	php_uref_protect();
@@ -249,7 +282,6 @@ PHP_METHOD(uref, __construct)
 	}
 
 	php_uref_attach(getThis(), object);
-
 }
 
 PHP_METHOD(uref, valid)
@@ -332,6 +364,11 @@ PHP_MSHUTDOWN_FUNCTION(uref)
 	return SUCCESS;
 }
 
+static inline void php_uref_dtor(zval *zv) {
+	zend_hash_destroy(static_cast<HashTable*>(Z_PTR_P(zv)));
+	efree(Z_PTR_P(zv));
+}
+
 /* {{{ PHP_RINIT_FUNCTION
  */
 PHP_RINIT_FUNCTION(uref)
@@ -342,7 +379,7 @@ PHP_RINIT_FUNCTION(uref)
 
 	UG(state) = UREF_RUNTIME;
 
-	zend_hash_init(&UG(refs), 32, NULL, ZVAL_PTR_DTOR, 0);
+	zend_hash_init(&UG(refs), 32, NULL, php_uref_dtor, 0);
 	{
 		std::string Error;
 		std::string Triple = llvm::sys::getProcessTriple();

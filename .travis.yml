@@ -2,12 +2,10 @@ dist: trusty
 addons:
  apt:
    sources:
-     - ubuntu-toolchain-r-test
      - sourceline: 'deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-4.0 main' key_url: 'http://apt.llvm.org/llvm-snapshot.gpg.key'
    packages:
      - clang-4.0
 
-language: cpp
 language: php
 php:
   - 7.0

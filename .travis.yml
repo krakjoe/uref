@@ -5,6 +5,7 @@ addons:
       - llvm-toolchain-trusty-5.0
     packages:
       - libllvm5.0
+      - llvm-5.0-dev
 php:
   - 7.0
   - 7.1

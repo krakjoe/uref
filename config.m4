@@ -18,4 +18,6 @@ if test "$PHP_UREF" != "no"; then
   AC_DEFINE(HAVE_UREF, 1, [ Have uref support ])
 
   PHP_NEW_EXTENSION(uref, php_uref.cc, $ext_shared)
+
+  PHP_ADD_MAKEFILE_FRAGMENT
 fi

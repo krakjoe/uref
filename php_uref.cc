@@ -79,7 +79,7 @@ ZEND_BEGIN_MODULE_GLOBALS(uref)
 
 ZEND_END_MODULE_GLOBALS(uref)
 
-ZEND_DECLARE_MODULE_GLOBALS(uref);
+ZEND_DECLARE_MODULE_GLOBALS(uref)
 
 #ifdef ZTS
 #	define UG(v) TSRMG(uref_globals_id, zend_uref_globals *, v)

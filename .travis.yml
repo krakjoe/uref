@@ -1,6 +1,6 @@
 language: php
 compiler:
-  - gcc
+  - clang
 addons:
   apt:
     packages:

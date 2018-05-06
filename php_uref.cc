@@ -43,11 +43,26 @@
 #include <llvm/MC/MCSubtargetInfo.h>
 #include <llvm/MC/MCInst.h>
 
+#include <llvm/IR/Instruction.h>
+
+typedef struct _php_uref_t {
+	zval referent;
+	zend_object std;
+} php_uref_t;
+
+#define php_uref_from(o) ((php_uref_t*) (((char*) o) - XtOffsetOf(php_uref_t, std)))
+#define php_uref_fetch(z) php_uref_from(Z_OBJ_P(z))
+
+typedef enum _php_uref_state_t {
+	UREF_RUNTIME,
+	UREF_SHUTDOWN
+} php_uref_state_t;
+
 ZEND_BEGIN_MODULE_GLOBALS(uref)
 	HashTable refs;
-	uint8_t trap;
-	void *addr;
-
+	php_uref_state_t state;
+	zend_ulong object;
+	uint8_t  trap;
 	struct {
 		struct {
 			struct sigaction segv;
@@ -75,14 +90,6 @@ ZEND_DECLARE_MODULE_GLOBALS(uref);
 zend_class_entry *php_uref_ce;
 zend_object_handlers php_uref_handlers;
 
-typedef struct _php_uref_t {
-	zval referent;
-	zend_object std;
-} php_uref_t;
-
-#define php_uref_from(o) ((php_uref_t*) (((char*) o) - XtOffsetOf(php_uref_t, std)))
-#define php_uref_fetch(z) php_uref_from(Z_OBJ_P(z))
-
 static size_t php_uref_pagesize;
 
 static zend_always_inline void *php_uref_pageof(void *addr) {
@@ -93,7 +100,11 @@ static zend_always_inline size_t php_uref_get_pagesize(void *addr, size_t size) 
 	return (size_t) php_uref_pageof((void *) ((size_t) addr + size - 1)) - (size_t) php_uref_pageof(addr) + php_uref_pagesize;
 }
 
-uint64_t php_uref_get_instr_length(uint64_t address, size_t maxlen = 12) {
+static zend_always_inline zend_ulong php_uref_bucketof(zend_object *object) {
+	return reinterpret_cast<zend_ulong>(&(EG(objects_store).object_buckets[object->handle]));
+}
+
+uint64_t php_uref_get_instr_length(uint64_t address) {
 	llvm::MCInst inst;
 	uint64_t     size;
 
@@ -105,10 +116,10 @@ uint64_t php_uref_get_instr_length(uint64_t address, size_t maxlen = 12) {
 	llvm::raw_os_ostream os2(std::cerr);
 
 	/* silence streams, todo: something better */
-	//std::cerr.setstate(std::ios_base::badbit);
+	std::cerr.setstate(std::ios_base::badbit);
 
 	switch(UG(Disassembler)->getInstruction(inst, size, 
-		llvm::ArrayRef<uint8_t>((uint8_t*) address, maxlen),
+		llvm::ArrayRef<uint8_t>((uint8_t*) address, 12),
 		(uint64_t) address, 
 		os1, os2)) {
 		case llvm::MCDisassembler::Success:
@@ -124,28 +135,32 @@ static inline void php_uref_protect() {
 	zend_objects_store *store = &EG(objects_store);
 	
 	mprotect(php_uref_pageof(store->object_buckets), 
-		 php_uref_get_pagesize(store->object_buckets, store->size * sizeof(zend_object*)+1), 
-		 PROT_READ);
+		 php_uref_get_pagesize(store->object_buckets, (store->size) * sizeof(zend_object*)), 
+		 PROT_READ|PROT_EXEC);
 }
 
 static inline void php_uref_unprotect() {
 	zend_objects_store *store = &EG(objects_store);
 
 	mprotect(php_uref_pageof(store->object_buckets), 
-		 php_uref_get_pagesize(store->object_buckets, store->size * sizeof(zend_object*)+1), 
+		 php_uref_get_pagesize(store->object_buckets, (store->size) * sizeof(zend_object*)), 
 		 PROT_READ|PROT_WRITE);
 }
 
 static inline void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]-1);
 
-	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_READ|PROT_WRITE);
-
-	*rip = UG(trap);
+	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_WRITE);
+	
+	rip[0] = UG(trap);
 
 	context->uc_mcontext.gregs[REG_RIP] = reinterpret_cast<uint64_t>(rip);
 
-	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_READ|PROT_EXEC);
+	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_EXEC);
+
+	if (UG(state) == UREF_SHUTDOWN) {
+		return;
+	}
 
 	php_uref_protect();
 }
@@ -161,17 +176,40 @@ static inline void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) 
 		return;
 	}
 
+	if (UG(state) == UREF_SHUTDOWN) {
+		php_uref_unprotect();
+		return;
+	}
+
+	if (zend_hash_num_elements(&UG(refs)) == 0) {
+		php_uref_unprotect();
+		return;
+	}
+
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_READ|PROT_WRITE);
 
-	UG(trap) = *trap;
+	UG(trap) = trap[0];
 
-	*trap = 0xCC;
+	trap[0] = 0xCC;
 
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_READ|PROT_EXEC);
 
 	php_uref_unprotect();
 
-	UG(addr) = reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_CR2]);
+	{
+		zval *ze = zend_hash_index_find(&UG(refs), 
+			reinterpret_cast<zend_ulong>(info->si_addr));
+
+		if (ze) {
+			php_uref_t *u = php_uref_fetch(ze);
+
+			if (Z_TYPE(u->referent) != IS_UNDEF && 
+			    Z_REFCOUNT(u->referent) == 0) {
+				ZVAL_UNDEF(&u->referent);
+			}
+		}
+	}
+	
 }
 
 static inline zend_object* php_uref_create(zend_class_entry *ce) {
@@ -189,9 +227,9 @@ static inline zend_object* php_uref_create(zend_class_entry *ce) {
 static inline void php_uref_attach(zval *ze, zval *referent) {
 	php_uref_t *u = php_uref_fetch(ze);
 
-	ZVAL_COPY(&u->referent, referent);
+	ZVAL_COPY_VALUE(&u->referent, referent);
 
-	if (zend_hash_index_update(&UG(refs), (zend_ulong) Z_OBJ_P(referent), ze)) {
+	if (zend_hash_index_update(&UG(refs), php_uref_bucketof(Z_OBJ_P(referent)), ze)) {
 		Z_ADDREF_P(ze);
 	}
 
@@ -302,6 +340,8 @@ PHP_RINIT_FUNCTION(uref)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 
+	UG(state) = UREF_RUNTIME;
+
 	zend_hash_init(&UG(refs), 32, NULL, ZVAL_PTR_DTOR, 0);
 	{
 		std::string Error;
@@ -347,11 +387,15 @@ PHP_RINIT_FUNCTION(uref)
 
 PHP_RSHUTDOWN_FUNCTION(uref)
 {
+	UG(state) = UREF_SHUTDOWN;
+
 	zend_hash_destroy(&UG(refs));
 
 	if (UG(Disassembler)) {
 		delete UG(CTX);
 	}
+
+	php_uref_unprotect();
 
 	return SUCCESS;
 }

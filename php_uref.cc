@@ -24,6 +24,7 @@
 #include <php_uref.h>
 
 #include <unistd.h>
+#include <stdlib.h>
 #include <ucontext.h>
 #include <sys/mman.h>
 

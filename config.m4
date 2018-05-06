@@ -16,7 +16,6 @@ if test "$PHP_UREF" != "no"; then
 
   LLVM_CFLAGS=`$LLVM_CONFIG --cflags`
   LLVM_LIBDIR=`$LLVM_CONFIG --ldflags --link-shared --libs all --system-libs`
-  LLVM_LIBDIR="$LLVM_LIBDIR -lstdc++ -lc"
 
   PHP_EVAL_LIBLINE($LLVM_LIBDIR, UREF_SHARED_LIBADD)
   PHP_EVAL_INCLINE($LLVM_CFLAGS, UREF_CFLAGS)

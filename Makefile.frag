@@ -8,4 +8,4 @@ uref-test-coverage-html: uref-test-coverage-lcov
 	genhtml $(top_srcdir)/coverage.info --output-directory=$(top_srcdir)/html
 
 uref-test-coverage-travis:
-	CCACHE_DISABLE=1 EXTRA_CFLAGS="-fprofile-arcs -ftest-coverage" $(MAKE)
+	CCACHE_DISABLE=1 EXTRA_CXXFLAGS="-fprofile-arcs -ftest-coverage" EXTRA_CFLAGS="-fprofile-arcs -ftest-coverage" $(MAKE)

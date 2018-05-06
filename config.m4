@@ -10,7 +10,6 @@ if test "$PHP_UREF" != "no"; then
 
   LLVM_CFLAGS=`$LLVM_CONFIG --cflags`
   LLVM_LIBDIR=`$LLVM_CONFIG --ldflags --link-shared --libs all --system-libs`
-  LLVM_CXXFLAGS=`$LLVM_CONFIG --cxxflags`
   
   PHP_EVAL_LIBLINE($LLVM_LIBDIR, UREF_SHARED_LIBADD)
   PHP_EVAL_INCLINE($LLVM_CFLAGS, UREF_CFLAGS)
@@ -19,7 +18,7 @@ if test "$PHP_UREF" != "no"; then
 
   AC_DEFINE(HAVE_UREF, 1, [ Have uref support ])
 
-  PHP_NEW_EXTENSION(uref, php_uref.cc, $ext_shared,,$LLVM_CXXFLAGS,cxx)
+  PHP_NEW_EXTENSION(uref, php_uref.cc, $ext_shared,,"-std=c++11",cxx)
 
   PHP_ADD_MAKEFILE_FRAGMENT
 fi

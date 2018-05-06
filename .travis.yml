@@ -24,11 +24,6 @@ env:
     - OPCACHE=1 TEST_PHP_ARGS="$DEF"
     - OPCACHE=0 TEST_PHP_ARGS="$DEF" RULE="uref-test-coverage-travis"
 
-matrix:
-  allow_failures:
-    - php: nightly
-      env: OPCACHE=0 TEST_PHP_ARGS="$DEF $MEMCHECK"
-
 before_install:
   - test $RULE != "uref-test-coverage-travis" || pip install --user cpp-coveralls
 

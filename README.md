@@ -1,24 +1,13 @@
 # uref
+[![Build Status](https://travis-ci.org/krakjoe/uref.svg?branch=master)](https://travis-ci.org/krakjoe/uref)
+[![Coverage Status](https://coveralls.io/repos/github/krakjoe/uref/badge.svg)](https://coveralls.io/github/krakjoe/uref)
 
 uref allows the programmer to create weak references to other objects ... using dark scary magic ...
 
-I like dark scary magic ...
+# Requirements
 
-# experimental
-
-note that this is a totally unproven idea, but was a bit of fun to write and seems theoretically sound ...
-
-# tests ...
-
-whatever ...
-
-# hardware
-
-currently this will only work on x64 *nix, with zend mm (or another mm that allows permissions to be set on heap memory) ...
-
-I hate windows, if you want to make windows work, be my guest ...
-
-x86 support shouldn't be that difficult, but seems unnecessary ...
+ - llvm >= 4.0
+ - x64 *nix
 
 # API
 

@@ -1,11 +1,8 @@
 dnl $Id$
 dnl config.m4 for extension uref
 
-PHP_ARG_WITH(uref, whether to enable uref support,
-[  --with-uref          Enable uref support], no)
-
-PHP_ARG_WITH(llvm-config, path to llvm-config,
-[  --with-llvm-config     path to llvm-config])
+PHP_ARG_ENABLE(uref, whether to enable uref support,
+[  --enable-uref          Enable uref support], no)
 
 if test "$PHP_UREF" != "no"; then
   if test "x$LLVM_CONFIG" = "x"; then

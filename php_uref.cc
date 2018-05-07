@@ -21,6 +21,8 @@
 
 #include <php.h>
 #include <ext/standard/info.h>
+#include <ext/spl/spl_exceptions.h>
+#include <zend_exceptions.h>
 #include <php_uref.h>
 
 #include <unistd.h>
@@ -37,14 +39,11 @@
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/MC/MCContext.h>
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCSubtargetInfo.h>
 #include <llvm/MC/MCInst.h>
-
-#include <llvm/IR/Instruction.h>
 
 typedef struct _php_uref_t {
 	zval referent;
@@ -109,10 +108,6 @@ uint64_t php_uref_get_instr_length(uint64_t address) {
 	llvm::MCInst inst;
 	uint64_t     size;
 
-	if (!UG(Disassembler)) {
-		return 0;	
-	}
-
 	llvm::raw_os_ostream os1(std::cerr);
 	llvm::raw_os_ostream os2(std::cerr);
 
@@ -127,7 +122,7 @@ uint64_t php_uref_get_instr_length(uint64_t address) {
 			return size;
 
 		default: {/* nothing */}
-	};
+	}
 
 	return 0;
 }
@@ -213,6 +208,46 @@ static zend_object* php_uref_create(zend_class_entry *ce) {
 
 	return &u->std;
 }
+
+#define php_uref_unsupported(thing) \
+	zend_throw_exception_ex( \
+		spl_ce_RuntimeException, 0, "uref objects do not support " thing);
+
+static zend_object* php_uref_clone(zval *zv) {
+	php_uref_unsupported("cloning");
+
+	return Z_OBJ_P(zv);
+}
+
+static void php_uref_write(zval *object, zval *member, zval *value, void **rtc) {
+	php_uref_unsupported("properties");
+}
+
+static zval* php_uref_read(zval *object, zval *member, int type, void **rtc, zval *rv) {
+	if (!EG(exception)) {
+		php_uref_unsupported("properties");
+	}
+
+	return &EG(uninitialized_zval);
+}
+
+static zval *php_uref_read_ptr(zval *object, zval *member, int type, void **rtc) {
+	php_uref_unsupported("references");
+	return NULL;
+}
+
+static int php_uref_isset(zval *object, zval *member, int hse, void **rtc) {
+	if (hse != 2) {
+		php_uref_unsupported("properties");
+	}
+	return 0;
+}
+
+static void php_uref_unset(zval *object, zval *member, void **rtc) {
+	php_uref_unsupported("properties");
+}
+
+
 
 static zend_always_inline int php_uref_add(zend_long idx, zval *ze) {
 	HashTable *refs = static_cast<HashTable*>(zend_hash_index_find_ptr(&UG(refs), idx));
@@ -329,6 +364,12 @@ PHP_MINIT_FUNCTION(uref)
 	php_uref_ce->create_object = php_uref_create;
 
 	memcpy(&php_uref_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	php_uref_handlers.clone_obj = php_uref_clone;
+	php_uref_handlers.write_property = php_uref_write;
+	php_uref_handlers.read_property = php_uref_read;
+	php_uref_handlers.has_property = php_uref_isset;
+	php_uref_handlers.unset_property = php_uref_unset;
+	php_uref_handlers.get_property_ptr_ptr = php_uref_read_ptr;
 
 	php_uref_handlers.offset = XtOffsetOf(php_uref_t, std);
 

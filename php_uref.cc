@@ -44,12 +44,10 @@
 #include <llvm/MC/MCSubtargetInfo.h>
 #include <llvm/MC/MCInst.h>
 
-#ifndef REG_RIP
-#	ifndef REG_EIP
-#		error "unsupported platform"
-#	else
-#		define REG_RIP REG_EIP
-#	endif
+#ifndef __x86_64__
+#	define UREF_IP_REG REG_EIP
+#else
+#	define UREF_IP_REG REG_RIP
 #endif
 
 typedef struct _php_uref_t {
@@ -154,13 +152,13 @@ static zend_always_inline void php_uref_unprotect() {
 }
 
 static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
-	uint8_t *rip = reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]-1);
+	uint8_t *rip = reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[UREF_IP_REG]-1);
 
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_WRITE);
 	
 	rip[0] = UG(trap);
 
-	context->uc_mcontext.gregs[REG_RIP] = reinterpret_cast<uint64_t>(rip);
+	context->uc_mcontext.gregs[UREF_IP_REG] = reinterpret_cast<greg_t>(rip);
 
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_EXEC);
 
@@ -173,8 +171,8 @@ static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
 
 static void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = 
-		reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]);
-	uint8_t *trap = rip + php_uref_lengthof(context->uc_mcontext.gregs[REG_RIP]);
+		reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[UREF_IP_REG]);
+	uint8_t *trap = rip + php_uref_lengthof(context->uc_mcontext.gregs[UREF_IP_REG]);
 
 	if (info->si_code != SEGV_ACCERR) {
 		/* segfault for some other reason, breaks everything */

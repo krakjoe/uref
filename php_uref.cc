@@ -96,7 +96,7 @@ static zend_always_inline void *php_uref_pageof(void *addr) {
 	return (void *) ((size_t) addr & ~(php_uref_pagesize - 1));
 }
 
-static zend_always_inline size_t php_uref_get_pagesize(void *addr, size_t size) {
+static zend_always_inline size_t php_uref_boundaryof(void *addr, size_t size) {
 	return (size_t) php_uref_pageof((void *) ((size_t) addr + size - 1)) - (size_t) php_uref_pageof(addr) + php_uref_pagesize;
 }
 
@@ -104,7 +104,7 @@ static zend_always_inline zend_ulong php_uref_bucketof(zend_object *object) {
 	return reinterpret_cast<zend_ulong>(&(EG(objects_store).object_buckets[object->handle]));
 }
 
-uint64_t php_uref_get_instr_length(uint64_t address) {
+uint64_t php_uref_lengthof(uint64_t address) {
 	llvm::MCInst inst;
 	uint64_t     size;
 
@@ -131,7 +131,7 @@ static zend_always_inline void php_uref_protect() {
 	zend_objects_store *store = &EG(objects_store);
 	
 	mprotect(php_uref_pageof(store->object_buckets), 
-		 php_uref_get_pagesize(store->object_buckets, (store->size) * sizeof(zend_object*)), 
+		 php_uref_boundaryof(store->object_buckets, store->size * sizeof(zend_object*)), 
 		 PROT_READ);
 }
 
@@ -139,7 +139,7 @@ static zend_always_inline void php_uref_unprotect() {
 	zend_objects_store *store = &EG(objects_store);
 
 	mprotect(php_uref_pageof(store->object_buckets), 
-		 php_uref_get_pagesize(store->object_buckets, (store->size) * sizeof(zend_object*)), 
+		 php_uref_boundaryof(store->object_buckets, store->size * sizeof(zend_object*)), 
 		 PROT_READ|PROT_WRITE);
 }
 
@@ -166,7 +166,7 @@ static zend_always_inline void php_uref_update(zend_long idx);
 static void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = 
 		reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]);
-	uint8_t *trap = rip + php_uref_get_instr_length(context->uc_mcontext.gregs[REG_RIP]);
+	uint8_t *trap = rip + php_uref_lengthof(context->uc_mcontext.gregs[REG_RIP]);
 
 	if (info->si_code != SEGV_ACCERR) {
 		/* segfault for some other reason, breaks everything */
@@ -247,8 +247,6 @@ static void php_uref_unset(zval *object, zval *member, void **rtc) {
 	php_uref_unsupported("properties");
 }
 
-
-
 static zend_always_inline int php_uref_add(zend_long idx, zval *ze) {
 	HashTable *refs = static_cast<HashTable*>(zend_hash_index_find_ptr(&UG(refs), idx));
 
@@ -293,17 +291,6 @@ static zend_always_inline void php_uref_update(zend_long idx) {
 	}
 }
 
-static zend_always_inline void php_uref_attach(zval *ze, zval *referent) {
-	php_uref_t *u = php_uref_fetch(ze);
-
-	ZVAL_COPY_VALUE(&u->referent, referent);
-
-	if (php_uref_add(php_uref_bucketof(Z_OBJ_P(referent)), ze) != SUCCESS) {
-		/* throw ? */
-	}
-
-	php_uref_protect();
-}
 
 ZEND_BEGIN_ARG_INFO_EX(php_uref_construct_arginfo, 0, 0, 1)
 	ZEND_ARG_INFO(0, object)
@@ -311,13 +298,23 @@ ZEND_END_ARG_INFO()
 
 PHP_METHOD(uref, __construct) 
 {
+	php_uref_t *u = php_uref_fetch(getThis());
 	zval *object = NULL;
+	
 
 	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "o", &object) != SUCCESS) {
 		return;
 	}
 
-	php_uref_attach(getThis(), object);
+	ZVAL_COPY_VALUE(&u->referent, object);
+
+	if (php_uref_add(
+		php_uref_bucketof(Z_OBJ_P(object)), 
+		getThis()) != SUCCESS) {
+		/* throw ? */
+	}
+
+	php_uref_protect();
 }
 
 PHP_METHOD(uref, valid)

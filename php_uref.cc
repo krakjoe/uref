@@ -299,7 +299,6 @@ PHP_METHOD(uref, __construct)
 {
 	php_uref_t *u = php_uref_fetch(getThis());
 	zval *object = NULL;
-	
 
 	if (zend_parse_parameters_throw(ZEND_NUM_ARGS(), "o", &object) != SUCCESS) {
 		return;
@@ -308,7 +307,7 @@ PHP_METHOD(uref, __construct)
 	ZVAL_COPY_VALUE(&u->referent, object);
 
 	if (php_uref_add(
-		php_uref_bucketof(Z_OBJ_P(object)), 
+		php_uref_bucketof(Z_OBJ_P(object)),
 		getThis()) != SUCCESS) {
 		/* throw ? */
 	}
@@ -358,6 +357,7 @@ PHP_MINIT_FUNCTION(uref)
 
 	php_uref_ce = zend_register_internal_class(&ce);
 	php_uref_ce->create_object = php_uref_create;
+	php_uref_ce->ce_flags |= ZEND_ACC_FINAL;
 
 	memcpy(&php_uref_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	php_uref_handlers.clone_obj = php_uref_clone;

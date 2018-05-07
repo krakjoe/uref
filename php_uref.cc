@@ -44,6 +44,14 @@
 #include <llvm/MC/MCSubtargetInfo.h>
 #include <llvm/MC/MCInst.h>
 
+#ifndef REG_RIP
+#	ifndef REG_EIP
+#		error "unsupported platform"
+#	else
+#		define REG_RIP REG_EIP
+#	endif
+#endif
+
 typedef struct _php_uref_t {
 	zval referent;
 	zend_object std;
@@ -118,7 +126,7 @@ uint64_t php_uref_lengthof(uint64_t address) {
 
 	switch(UG(Disassembler)->getInstruction(inst, size, 
 		llvm::ArrayRef<uint8_t>((uint8_t*) address, 12),
-		(uint64_t) address, 
+		address, 
 		os1, os2)) {
 		case llvm::MCDisassembler::Success:
 			return size;

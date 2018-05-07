@@ -12,7 +12,7 @@ if test "$PHP_UREF" != "no"; then
   PHP_REQUIRE_CXX()
 
   LLVM_CFLAGS=`$LLVM_CONFIG --cflags`
-  LLVM_LIBDIR=`$LLVM_CONFIG --ldflags --link-shared --libs all`
+  LLVM_LIBDIR=`$LLVM_CONFIG --ldflags --link-shared --libs target native mcdisassembler`
 
   PHP_EVAL_LIBLINE($LLVM_LIBDIR, UREF_SHARED_LIBADD)
   PHP_EVAL_INCLINE($LLVM_CFLAGS, UREF_CFLAGS)

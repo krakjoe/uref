@@ -6,7 +6,7 @@
 # Requirements
 
  - llvm >= 4.0
- - x64 *nix
+ - x86/x64 *nix
  - bravery
 
 # API

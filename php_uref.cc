@@ -89,6 +89,9 @@ ZEND_DECLARE_MODULE_GLOBALS(uref)
 zend_class_entry *php_uref_ce;
 zend_object_handlers php_uref_handlers;
 
+static zend_always_inline int php_uref_add(zend_ulong idx, zval *ze);
+static zend_always_inline void php_uref_update(zend_ulong idx);
+
 static size_t php_uref_pagesize;
 
 static zend_always_inline void *php_uref_pageof(void *addr) {
@@ -160,8 +163,6 @@ static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
 	php_uref_protect();
 }
 
-static zend_always_inline void php_uref_update(zend_ulong idx);
-
 static void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = 
 		reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[REG_RIP]);
@@ -208,15 +209,31 @@ static zend_object* php_uref_create(zend_class_entry *ce) {
 	return &u->std;
 }
 
+static zend_object* php_uref_clone(zval *zv) {
+	php_uref_t *u = php_uref_fetch(zv);
+	php_uref_t *c;	
+	zend_object *co = php_uref_create(Z_OBJCE_P(zv));
+	zval rv;
+
+	ZVAL_OBJ(&rv, co);
+
+	c = php_uref_from(co);
+
+	ZVAL_COPY_VALUE(&c->referent, &u->referent);
+
+	if (php_uref_add(
+		php_uref_bucketof(Z_OBJ(c->referent)), &rv) != SUCCESS) {
+		/* throw ? */
+	}
+
+	php_uref_protect();
+
+	return co;
+}
+
 #define php_uref_unsupported(thing) \
 	zend_throw_exception_ex( \
 		spl_ce_RuntimeException, 0, "uref objects do not support " thing);
-
-static zend_object* php_uref_clone(zval *zv) {
-	php_uref_unsupported("cloning");
-
-	return Z_OBJ_P(zv);
-}
 
 static void php_uref_write(zval *object, zval *member, zval *value, void **rtc) {
 	php_uref_unsupported("properties");

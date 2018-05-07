@@ -22,7 +22,7 @@ final class uref {
 ?>
 ```
 
-*Note: `uref` does not support properties or cloning*
+*Note: `uref` does not support properties*
 
 # Implementation
 

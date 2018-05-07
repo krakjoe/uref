@@ -1,5 +1,5 @@
 --TEST--
-No cloning
+Cloning
 --SKIPIF--
 <?php
 if (!extension_loaded('uref')) {
@@ -11,10 +11,16 @@ if (!extension_loaded('uref')) {
 $s = new stdClass;
 $u = new uref($s);
 
-clone $u;
+$u2 = clone $u;
+
+var_dump($u->valid(), $u2->valid());
+
+unset($s);
+
+var_dump($u->valid(), $u2->valid());
 ?>
---EXPECTF--
-Fatal error: Uncaught RuntimeException: uref objects do not support cloning in %s:5
-Stack trace:
-#0 {main}
-  thrown in %s on line 5
+--EXPECT--
+bool(true)
+bool(true)
+bool(false)
+bool(false)

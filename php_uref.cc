@@ -161,7 +161,7 @@ static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
 	php_uref_protect();
 }
 
-static zend_always_inline void php_uref_update(zend_long idx);
+static zend_always_inline void php_uref_update(zend_ulong idx);
 
 static void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = 
@@ -247,7 +247,7 @@ static void php_uref_unset(zval *object, zval *member, void **rtc) {
 	php_uref_unsupported("properties");
 }
 
-static zend_always_inline int php_uref_add(zend_long idx, zval *ze) {
+static zend_always_inline int php_uref_add(zend_ulong idx, zval *ze) {
 	HashTable *refs = static_cast<HashTable*>(zend_hash_index_find_ptr(&UG(refs), idx));
 
 	if (!refs) {
@@ -267,7 +267,7 @@ static zend_always_inline int php_uref_add(zend_long idx, zval *ze) {
 	return FAILURE;
 }
 
-static zend_always_inline void php_uref_update(zend_long idx) {
+static zend_always_inline void php_uref_update(zend_ulong idx) {
 	HashTable *refs = static_cast<HashTable*>(zend_hash_index_find_ptr(&UG(refs), idx));
 	zval *ze;
 	bool deleting = false;

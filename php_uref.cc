@@ -44,10 +44,21 @@
 #include <llvm/MC/MCSubtargetInfo.h>
 #include <llvm/MC/MCInst.h>
 
-#ifndef __x86_64__
-#	define UREF_IP_REG REG_EIP
+#if defined(__APPLE__)
+#if 	defined(__LP64__)
+#		define UREF_IP_REF(mc) (mc).ss.rip
+		typedef uint64_t uref_register_t;
+#	else
+#		define UREF_IP_REG(mc) (mc).ss.eip
+		typedef unsigned int uref_register_t;
+#	endif
 #else
-#	define UREF_IP_REG REG_RIP
+#	ifndef __x86_64__
+#		define UREF_IP_REG(mc) (mc).gregs[REG_EIP]
+#	else
+#		define UREF_IP_REG(mc) (mc).gregs[REG_RIP]
+#	endif
+	typedef greg_t uref_register_t;
 #endif
 
 typedef struct _php_uref_t {
@@ -152,13 +163,13 @@ static zend_always_inline void php_uref_unprotect() {
 }
 
 static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
-	uint8_t *rip = reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[UREF_IP_REG]-1);
+	uint8_t *rip = reinterpret_cast<uint8_t*>(UREF_IP_REG(context->uc_mcontext)-1);
 
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_WRITE);
 	
 	rip[0] = UG(trap);
 
-	context->uc_mcontext.gregs[UREF_IP_REG] = reinterpret_cast<greg_t>(rip);
+	UREF_IP_REG(context->uc_mcontext) = reinterpret_cast<uref_register_t>(rip);
 
 	mprotect(php_uref_pageof(rip), php_uref_pagesize, PROT_EXEC);
 
@@ -171,8 +182,8 @@ static void php_uref_trap(int sig, siginfo_t *info, ucontext_t *context) {
 
 static void php_uref_segv(int sig, siginfo_t *info, ucontext_t *context) {
 	uint8_t *rip = 
-		reinterpret_cast<uint8_t*>(context->uc_mcontext.gregs[UREF_IP_REG]);
-	uint8_t *trap = rip + php_uref_lengthof(context->uc_mcontext.gregs[UREF_IP_REG]);
+		reinterpret_cast<uint8_t*>(UREF_IP_REG(context->uc_mcontext));
+	uint8_t *trap = rip + php_uref_lengthof(UREF_IP_REG(context->uc_mcontext));
 
 	if (info->si_code != SEGV_ACCERR) {
 		/* segfault for some other reason, breaks everything */

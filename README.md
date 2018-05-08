@@ -9,6 +9,16 @@
  - x86/x64 *nix/darwin
  - bravery
 
+# LLVM
+
+Following components must be available:
+
+ - Target
+ - Native
+ - MCDisassembler
+
+`llvm-config` should be in path, or `LLVM_CONFIG` set in `ENV` (for `configure`)
+
 # API
 
 ```php

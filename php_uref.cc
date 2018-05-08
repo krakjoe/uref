@@ -27,7 +27,13 @@
 
 #include <unistd.h>
 #include <stdlib.h>
+
+#if defined(__APPLE__)
+#	define _XOPEN_SOURCE
+#endif
+
 #include <ucontext.h>
+#include <signal.h>
 #include <sys/mman.h>
 
 #include <iostream>
@@ -45,18 +51,18 @@
 #include <llvm/MC/MCInst.h>
 
 #if defined(__APPLE__)
-#if 	defined(__LP64__)
-#		define UREF_IP_REG(mc) (mc).ss.rip
+#	if defined(__LP64__)
+#		define UREF_IP_REG(mc) (mc)->ss.rip
 		typedef uint64_t uref_register_t;
 #	else
-#		define UREF_IP_REG(mc) (mc).ss.eip
+#		define UREF_IP_REG(mc) (mc)->ss.eip
 		typedef unsigned int uref_register_t;
 #	endif
 #else
-#	ifndef __x86_64__
-#		define UREF_IP_REG(mc) (mc).gregs[REG_EIP]
-#	else
+#	if defined(__x86_64__)
 #		define UREF_IP_REG(mc) (mc).gregs[REG_RIP]
+#	else
+#		define UREF_IP_REG(mc) (mc).gregs[REG_EIP]
 #	endif
 	typedef greg_t uref_register_t;
 #endif
@@ -82,10 +88,16 @@ ZEND_BEGIN_MODULE_GLOBALS(uref)
 	struct {
 		struct {
 			struct sigaction segv;
+#if defined(__APPLE__)
+			struct sigaction bus;
+#endif
 			struct sigaction trap;
 		} uref;
 		struct {
 			struct sigaction segv;
+#if defined(__APPLE__)
+			struct sigaction bus;
+#endif
 			struct sigaction trap;
 		} backup;
 	} action;
@@ -404,6 +416,14 @@ PHP_MINIT_FUNCTION(uref)
 
 	sigaction(SIGSEGV, &UG(action).uref.segv, &UG(action).backup.segv);
 
+#if defined (__APPLE__)
+	UG(action).uref.bus.sa_sigaction = (void (*)(int, siginfo_t*, void*)) php_uref_segv;
+	UG(action).uref.bus.sa_flags = SA_SIGINFO | SA_NODEFER;
+	sigemptyset(&UG(action).uref.bus.sa_mask);
+
+	sigaction(SIGBUS, &UG(action).uref.bus, &UG(action).backup.bus);
+#endif
+
 	UG(action).uref.trap.sa_sigaction = (void (*)(int, siginfo_t*, void*)) php_uref_trap;
 	UG(action).uref.trap.sa_flags = SA_SIGINFO | SA_NODEFER;
 	sigemptyset(&UG(action).uref.trap.sa_mask);
@@ -427,6 +447,10 @@ PHP_MSHUTDOWN_FUNCTION(uref)
 {
 	sigaction(SIGSEGV, &UG(action).backup.segv, NULL);
 	sigaction(SIGTRAP, &UG(action).backup.trap, NULL);
+
+#if defined (__APPLE__)
+	sigaction(SIGBUS, &UG(action).backup.bus, NULL);
+#endif
 
 	return SUCCESS;
 }

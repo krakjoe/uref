@@ -58,7 +58,14 @@
 #		define UREF_IP_REG(mc) (mc)->__ss.__eip
 		typedef unsigned int uref_register_t;
 #	endif
-#else
+#elif defined(__FreeBSD__)
+#	if defined(__amd64__)
+#		define UREF_IP_REG(mc) (mc).mc_rip
+#	else
+#		define UREG_IP_REG(mc) (mc).mc_eip
+#	endif
+	typedef __register_t uref_register_t;
+#else /* __LINUX__ */
 #	if defined(__x86_64__)
 #		define UREF_IP_REG(mc) (mc).gregs[REG_RIP]
 #	else

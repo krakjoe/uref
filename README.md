@@ -6,7 +6,10 @@
 # Requirements
 
  - llvm >= 4.0
- - x86/x64 *nix/darwin
+ - x86/x64
+   - *nix
+   - Darwin
+   - FreeBSD
  - bravery
 
 # LLVM

@@ -39,7 +39,6 @@
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/raw_os_ostream.h>
 #include <llvm/MC/MCContext.h>
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCSubtargetInfo.h>

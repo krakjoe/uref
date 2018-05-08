@@ -52,10 +52,10 @@
 
 #if defined(__APPLE__)
 #	if defined(__LP64__)
-#		define UREF_IP_REG(mc) (mc)->ss.rip
+#		define UREF_IP_REG(mc) (mc)->__ss.rip
 		typedef uint64_t uref_register_t;
 #	else
-#		define UREF_IP_REG(mc) (mc)->ss.eip
+#		define UREF_IP_REG(mc) (mc)->__ss.eip
 		typedef unsigned int uref_register_t;
 #	endif
 #else

@@ -38,6 +38,7 @@
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/MC/MCContext.h>
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
@@ -126,17 +127,12 @@ static zend_always_inline zend_ulong php_uref_bucketof(zend_object *object) {
 uint64_t php_uref_lengthof(uint64_t address) {
 	llvm::MCInst inst;
 	uint64_t     size;
-
-	llvm::raw_os_ostream os1(std::cerr);
-	llvm::raw_os_ostream os2(std::cerr);
-
-	/* silence streams, todo: something better */
-	std::cerr.setstate(std::ios_base::badbit);
+	llvm::raw_null_ostream ns;
 
 	switch(UG(Disassembler)->getInstruction(inst, size, 
 		llvm::ArrayRef<uint8_t>((uint8_t*) address, 12),
 		address, 
-		os1, os2)) {
+		ns, ns)) {
 		case llvm::MCDisassembler::Success:
 			return size;
 
